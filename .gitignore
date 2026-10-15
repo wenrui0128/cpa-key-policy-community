@@ -1,0 +1,67 @@
+*.dll
+*.dylib
+*.so
+*.h
+# built shared libraries (root dist/ only)
+/dist/
+.gomodcache/
+.gocache/
+.go-appdata/
+.go-localappdata/
+cpa-key-policy-state.json
+coverage.out
+
+# CPA reference checkout used for research, not part of this project
+_cpa_ref/
+# Official panel reference checkout used for research, not part of this project
+_panel_ref/
+
+# web frontend build output (rebuilt by `make web-build`)
+web/node_modules/
+web/dist/
+# tsc -b composite project artifacts
+web/*.tsbuildinfo
+web/vite.config.d.ts
+web/vite.config.js
+web/vitest.config.d.ts
+web/vitest.config.js
+
+# NOTE: internal/plugin/web/dist/index.html IS tracked. It is the go:embed
+# source for the hosted UI. `make web-build` overwrites it with the real build;
+# the committed copy is the built, privacy-checked management UI.
+
+node_modules/
+
+# Private runtime data, local credentials and export artifacts
+.env
+.env.*
+!.env.example
+.npmrc
+credentials*.json
+*-access.txt
+*.pem
+*.key
+*.p12
+*.pfx
+*.sqlite*
+*.db
+*.log
+*.bak
+*.zip
+*.tar*
+config.yaml
+key-policy-state*.json
+backups/
+secrets/
+auth-files/
+.DS_Store
+__pycache__/
+
+# Monitor runtime credentials, caches and generated artifacts
+monitor/data/
+monitor/secrets/
+monitor/.env
+monitor/**/__pycache__/
+*.pyc
+
+._*

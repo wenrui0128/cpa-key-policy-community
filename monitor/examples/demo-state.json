@@ -1,0 +1,146 @@
+{
+  "official": {
+    "remaining_percent": 62,
+    "used_percent": 38,
+    "reset_at": 2000259200,
+    "at": 2000000000
+  },
+  "plugin": {
+    "keys": [
+      {
+        "id": "team-alpha",
+        "name": "team-alpha",
+        "enabled": true,
+        "weekly_limit_usd": 250,
+        "daily_limit_usd": 0,
+        "usage": {
+          "weekly_usd": 60,
+          "daily_usd": 12.0,
+          "weekly_reset_at": 2000259200,
+          "daily_reset_at": 2000086400,
+          "weekly_call_count": 600,
+          "weekly_cache_read_tokens": 500000,
+          "weekly_input_tokens": 300000
+        },
+        "unpriced_models": []
+      },
+      {
+        "id": "team-beta",
+        "name": "team-beta",
+        "enabled": true,
+        "weekly_limit_usd": 250,
+        "daily_limit_usd": 0,
+        "usage": {
+          "weekly_usd": 140,
+          "daily_usd": 28.0,
+          "weekly_reset_at": 2000259200,
+          "daily_reset_at": 2000086400,
+          "weekly_call_count": 1400,
+          "weekly_cache_read_tokens": 500000,
+          "weekly_input_tokens": 300000
+        },
+        "unpriced_models": []
+      },
+      {
+        "id": "team-gamma",
+        "name": "team-gamma",
+        "enabled": true,
+        "weekly_limit_usd": 200,
+        "daily_limit_usd": 0,
+        "usage": {
+          "weekly_usd": 175,
+          "daily_usd": 35.0,
+          "weekly_reset_at": 2000259200,
+          "daily_reset_at": 2000086400,
+          "weekly_call_count": 1750,
+          "weekly_cache_read_tokens": 500000,
+          "weekly_input_tokens": 300000
+        },
+        "unpriced_models": []
+      },
+      {
+        "id": "team-delta",
+        "name": "team-delta",
+        "enabled": true,
+        "weekly_limit_usd": 100,
+        "daily_limit_usd": 0,
+        "usage": {
+          "weekly_usd": 18,
+          "daily_usd": 3.6,
+          "weekly_reset_at": 2000259200,
+          "daily_reset_at": 2000086400,
+          "weekly_call_count": 180,
+          "weekly_cache_read_tokens": 500000,
+          "weekly_input_tokens": 300000
+        },
+        "unpriced_models": []
+      },
+      {
+        "id": "team-epsilon",
+        "name": "team-epsilon",
+        "enabled": true,
+        "weekly_limit_usd": 100,
+        "daily_limit_usd": 0,
+        "usage": {
+          "weekly_usd": 92,
+          "daily_usd": 18.4,
+          "weekly_reset_at": 2000259200,
+          "daily_reset_at": 2000086400,
+          "weekly_call_count": 920,
+          "weekly_cache_read_tokens": 500000,
+          "weekly_input_tokens": 300000
+        },
+        "unpriced_models": []
+      },
+      {
+        "id": "team-zeta",
+        "name": "team-zeta",
+        "enabled": true,
+        "weekly_limit_usd": 100,
+        "daily_limit_usd": 0,
+        "usage": {
+          "weekly_usd": 30,
+          "daily_usd": 6.0,
+          "weekly_reset_at": 2000259200,
+          "daily_reset_at": 2000086400,
+          "weekly_call_count": 300,
+          "weekly_cache_read_tokens": 500000,
+          "weekly_input_tokens": 300000
+        },
+        "unpriced_models": []
+      }
+    ],
+    "at": 2000000000
+  },
+  "status": {
+    "plugin_ok": true,
+    "official_ok": true,
+    "cycle_ok": true,
+    "plugin_error": "",
+    "official_error": "",
+    "cycle_error": ""
+  },
+  "display": {
+    "estimated_total": 1000,
+    "time_zone": "UTC"
+  },
+  "reset_cards": {
+    "available_count": 3,
+    "expirations": [
+      {
+        "count": 2,
+        "expires_at": 2002592000
+      },
+      {
+        "count": 1,
+        "expires_at": 2004320000
+      }
+    ],
+    "unknown_expiry_count": 0,
+    "at": 2000000000,
+    "ok": true,
+    "error": ""
+  },
+  "mode": "demo",
+  "cycle_reset_enabled": false
+}

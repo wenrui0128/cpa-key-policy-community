@@ -1,0 +1,26 @@
+services:
+  monitor:
+    build: .
+    restart: unless-stopped
+    user: "10001:10001"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    ports: ["127.0.0.1:18765:18765"]
+    env_file: .env
+    environment:
+      BIND: 0.0.0.0
+      DATA_DIR: /data
+      KEY_FILE: /run/secrets/cpa_management_key
+    volumes:
+      - ./data:/data
+    secrets: [cpa_management_key]
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=16m"]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:18765/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+secrets:
+  cpa_management_key:
+    file: ./secrets/cpa_management_key

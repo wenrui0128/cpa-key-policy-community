@@ -1,0 +1,57 @@
+{
+  "synthetic_data": true,
+  "viewports": [
+    {
+      "width": 320,
+      "height": 800,
+      "overflow": false
+    },
+    {
+      "width": 375,
+      "height": 812,
+      "overflow": false
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "overflow": false
+    },
+    {
+      "width": 719,
+      "height": 800,
+      "overflow": false
+    },
+    {
+      "width": 844,
+      "height": 390,
+      "overflow": false
+    },
+    {
+      "width": 1080,
+      "height": 900,
+      "overflow": false
+    },
+    {
+      "width": 1280,
+      "height": 1000,
+      "overflow": false
+    }
+  ],
+  "checks": [
+    "key-label-text-and-attribute-escaping",
+    "zero-unknown-and-stale-reset-cards",
+    "stale-official-display",
+    "network-failure-keeps-last-view",
+    "plugin-weekly-management-page",
+    "no-browser-exceptions",
+    "reduced-motion",
+    "touch-target",
+    "anonymous-api-401"
+  ],
+  "screenshots": [
+    "monitor-desktop.png",
+    "monitor-mobile.png",
+    "plugin-desktop.png"
+  ],
+  "page_errors": []
+}

@@ -1,0 +1,23 @@
+{
+  "cpa_image": "8.0.24",
+  "plugin_version": "0.5.1-community.2",
+  "inference_calls": 0,
+  "upstream_accounts": 0,
+  "official_responses": "mocked",
+  "checks": [
+    "plugin-loaded",
+    "anonymous-management-401",
+    "embedded-ui-200",
+    "adoption-preserves-spend",
+    "idempotent-cycle",
+    "reset-replays-post-boundary",
+    "rollback-409",
+    "account-change-409",
+    "new-key-inherits-cycle",
+    "live-plugin-adapter",
+    "mock-official-cycle-sync",
+    "snapshot-private-fields-removed",
+    "failure-keeps-confirmed-quota",
+    "container-restart-retains-ledger"
+  ]
+}

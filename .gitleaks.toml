@@ -1,0 +1,8 @@
+[extend]
+useDefault = true
+
+[[rules]]
+id = "cpa-downstream-api-key"
+description = "Full generated CPA downstream key"
+regex = '''\bcpa_[A-Za-z0-9_-]{40,}\b'''
+keywords = ["cpa_"]

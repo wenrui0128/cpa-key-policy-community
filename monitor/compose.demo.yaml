@@ -1,0 +1,16 @@
+services:
+  monitor:
+    build: .
+    restart: unless-stopped
+    user: "10001:10001"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    ports: ["127.0.0.1:18765:18765"]
+    environment:
+      BIND: 0.0.0.0
+      DATA_DIR: /data
+      DEMO_MODE: "true"
+      ALLOWED_HOSTS: "127.0.0.1:18765,localhost:18765"
+    volumes: ["./data:/data"]
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=16m"]

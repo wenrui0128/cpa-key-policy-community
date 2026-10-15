@@ -1,0 +1,13 @@
+{
+  "demo_data": true,
+  "checks": [
+    "nonroot-runtime",
+    "readonly-rootfs",
+    "anonymous-health-minimal",
+    "anonymous-business-401",
+    "authenticated-state-200",
+    "secure-cookie",
+    "host-allowlist",
+    "secret-file-404"
+  ]
+}

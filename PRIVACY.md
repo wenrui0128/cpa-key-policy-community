@@ -1,21 +1,38 @@
-# Publication privacy review — 2026-10-14
+# Data and privacy
 
-This directory is a clean public source export, not a copy of a private Git repository. No Git history is included. Preserve the upstream MIT copyright and attribution when creating your own public repository.
+## Local data
 
-The review covers source, dependency lockfiles, documentation, built embedded HTML, synthetic screenshots, and the separately distributed Linux shared library. The public package excludes:
+| Component | Stored data | Location |
+|---|---|---|
+| Plugin | Key hashes and partial previews, display names, policies, aliases, classification rules and usage | Configured `state_file` |
+| Monitor | Viewer password hash and session configuration | Monitor `data` directory |
+| Monitor | Cached quota and usage | `data/cache.sqlite` |
+| Monitor | CPA management secret | Local secret file mounted into the container |
 
-- Account authorization files, management/viewer credentials, downstream keys and private-key files.
-- Production endpoints, domains, public/private IP addresses and personal home-directory paths.
-- Real key names, costs, quota caches, account IDs, reset-credit IDs, ledgers, logs and backups.
-- Host bootstrap/deployment scripts, captured terminal output and screenshots of real services.
-- node_modules, Python bytecode, build caches, source-control history and OS metadata.
+Generated downstream keys are returned in full only when created or rotated. The plugin stores hashes and partial previews. The plugin management page keeps its management secret in memory rather than localStorage.
 
-Example addresses use loopback or reserved example domains. Example users and dollar values are fabricated. Test credentials are generated at runtime, used only in temporary files and removed afterward. Screenshots were visually reviewed and PNG chunks checked for absence of textual/EXIF metadata. The plugin screenshot shows only a loopback test address and synthetic key previews.
+Monitor login cookies are signed and bound to the viewer password. Changing the password or session secret invalidates existing cookies.
 
-`python3 scripts/check-public-source.py` rejects credential patterns, personal paths, unexpected IPs/URL hosts, runtime files, symlinks, OS metadata and unreviewed binary assets. Gitleaks with the included CPA-key rule also passed. The shared library was built with `-trimpath -buildvcs=false` and stripped debug symbols, then checked for credential patterns and known private identifiers. SHA-256 manifests accompany the source and release artifacts.
+Keep state files, monitor data, secret files, logs and backups outside version control. Use protected storage for backups; usage records and display names may identify users even without complete API keys.
 
-Review results apply to these dated files; scanners cannot guarantee detection of every possible secret. Keep new data/secrets directories outside Git, retain the ignore rules, and rerun both scanners after any future edits. An authenticated dashboard still intentionally displays key names and spending to authorized viewers; do not assume that granting someone viewer access hides those statistics.
+## What viewers can see
 
-## Final publication check — 2026-10-15
+Authenticated monitor viewers can see Key display names, budgets and usage, official remaining percentage, reset time and reset-card expiry. Viewer access grants access to those statistics.
 
-An empty test-generated ledger (zero keys, no usage) was removed before publication. The scanner now rejects both historical runtime-ledger filename variants, regression tests cover those files and monitor runtime directories, and plugin tests isolate default state writes in a temporary directory. The new repository uses a GitHub noreply author address, with no inherited Git history.
+Monitor snapshots omit official account identifiers, reset-card IDs and profile fields, complete key material, credential previews and cycle history. The CPA management secret is read by the service and is not sent to the browser.
+
+## External requests
+
+- CPA handles upstream model requests. The Go plugin has no independent HTTP listener, outbound HTTP client or telemetry.
+- The plugin management page sends management requests to its selected CPA address.
+- The optional price-reference feature fetches public LiteLLM pricing from `raw.githubusercontent.com`. It sends no account, API key, model selection or prompt, omits cookies and referrers, and rejects redirects. The remote server can observe the browser's connection IP. Manual pricing remains available if the request is blocked.
+- In live mode, the monitor reads official usage and reset-credit data through CPA. With official-cycle synchronization enabled, it also updates the plugin's cycle state.
+- Demo mode uses sample data and does not run the collectors.
+
+No third-party executable script or font is loaded by the plugin management page.
+
+## Examples and screenshots
+
+Repository examples and screenshots use demonstration data. Before sharing your own screenshots, logs or bug reports, remove credentials, account identifiers, service addresses and any usage details you do not want to disclose.
+
+See [SECURITY.md](SECURITY.md) for authentication and deployment guidance.

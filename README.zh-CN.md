@@ -1,140 +1,35 @@
-# cpa-key-policy（中文说明）
+# cpa-key-policy
 
-独立源码发布版 **0.5.1-community.2**，基于 MIT 协议的上游 v0.5.1；不是插件商店的官方更新。发布包不含账户、密钥、用量账本、生产地址或私人部署脚本。
+[CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) 的 API Key 管理插件，支持模型权限、请求限速、每日与每周预算，以及模型别名和凭证分组。可在 CPA 内管理 Key，也可部署独立的 CPA Limits 页面查看额度和用量。
 
-保留官方周期同步管理 API、默认周用量、卡片额度条、卡片内周预算编辑，以及标题旁的导航按钮。官方周期需由独立可信调用方确认后同步，本版附带独立的 Limit 监控服务，见 monitor/README.md。发布版额外修复短密钥预览、限制管理密钥自动复用至同源地址、阻止跨站嵌入，并更新前端依赖。详见 [SECURITY.md](SECURITY.md)、[CHANGELOG.md](CHANGELOG.md) 和 [VALIDATION.md](VALIDATION.md)。
+版本：**0.5.1-community.2**（预发布） · [English](README.md)
 
-构建使用 Node.js 24+、Go 1.27.2，以及编译动态库所需的 C 编译器。编译 Go 前先运行 `make web-build`。本版只提供 Linux 构建任务，其他平台未经验证。GitHub CI 在推送和 PR 时验证，二进制构建需手动触发，不会自动发布 GitHub Release。
+## 功能
 
-面向 [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) 的**下游 API Key 策略插件**。
+- 为每个 Key 设置可用模型、RPM 和每日／每周预算。
+- 按 token 或请求次数计费，默认显示周用量，支持在 Key 卡片中修改周预算。
+- 为模型设置别名，并配置多个目标、优先调度或轮询。
+- 按账户档位或自定义规则选择凭证，支持加权轮询。
+- 通过网页或管理 API 创建、编辑、轮换和删除 Key。
+- 通过可选的监控服务查看官方剩余额度、重置时间和各 Key 用量，并按需启用官方周期同步。
 
-用人话说：你可以给客户发自己的 `cpa_…` 钥匙。每把钥匙只能用你允许的模型，还能限速、限额，并转到 CPA 真实上游（Codex、Claude、openai-compatibility 通道等）。CPA 自带的 `api-keys` 仍可留给管理员；**不要把插件下发的 key 再写进 `api-keys`**，否则会绕过本插件策略。
+## 界面
 
-| | |
-|---|---|
-| **上游仓库** | [origin652/cpa-plugin-key-policy](https://github.com/origin652/cpa-plugin-key-policy) |
-| **协议** | MIT |
-| **安装** | [CLIProxyAPI 插件商店](https://github.com/router-for-me/CLIProxyAPI-Plugins-Store)（上游版本）或自行编译此分支 |
-| **English** | [README.md](./README.md) |
+CPA Limits 额度监控：
 
----
+![CPA Limits 额度监控](docs/images/monitor-desktop.png)
 
-## 界面预览
+CPA 内的 Key 管理：
 
-以下截图的用户、消费金额和重置卡记录全部是虚构数据。
+![Key 管理](docs/images/plugin-desktop.png)
 
-![Limit 每周监控](docs/images/monitor-desktop.png)
+## 安装插件
 
-![插件额度管理](docs/images/plugin-desktop.png)
+提供的二进制适用于 **Linux amd64 / glibc**，已在 CPA **8.0.24** 验证。Alpine/musl、arm64 及其他环境需要单独编译和验证。
 
-独立监控页面的初始化、Docker 部署、HTTPS 反代、密钥管理和周期同步开关见 [监控部署文档](monitor/README.md)。默认只显示，不改变账本；启用 `SYNC_OFFICIAL_CYCLE=true` 后才会同步全部 Key 的官方周期。总额度估算默认 1000，可调整，和 Key 预算金额不作等值换算。
-
-## 它能干什么
-
-1. **发钥匙** — 批量创建下游 key，每把绑定可用模型 / 别名。  
-2. **做映射** — 客户端写 `model: fast`，插件转到例如 `codex` + `gpt-5.4-mini`。  
-3. **做限制** — 单 key 的 RPM、可选每日/每周美元额度，按 token 或按次计费。  
-4. **凭证分档 / 归类** — 请求可以钉死在 Codex free/team 等内置档，或你自定义的归类组，**不会串到别的凭证文件**。  
-5. **多目标别名** — 一个别名挂多个后端（优先 或 轮询）。  
-6. **网页管理** — 在 CPA 里管 key、全局别名、凭证归类。  
-
----
-
-## 核心概念
-
-### 下游 Key
-
-插件自己发的密钥（`cpa_…`），只由本插件鉴权。上面可以配置：
-
-- 允许的 **模型** 和/或 **别名**
-- RPM
-- 每日 / 每周美元上限（可选）
-- 是否允许主端口访问 `/v1/models`（见下文）
-
-### 别名（全局映射表）
-
-可复用的名字，例如 `fast`，展开成一条或多条 **目标**：
-
-| 字段 | 含义 |
-|------|------|
-| `provider` | CPA 提供商标识（`codex`、`claude`，或 openai-compatibility 的 **name**，如 `cerebras`） |
-| `target_model` | 上游真实模型 id |
-| `group` | 可选，限制用哪一类凭证（见下节） |
-| `dispatch` | `priority`（始终尝试第一个）或 `round-robin`（轮询） |
-| 计费 | `tokens`（百万 token 单价）或 `per_call`（每次固定金额） |
-
-Key 可以**引用**别名，不必重复填目标。多目标别名会展开成多条同名规则；**同一次请求**里鉴权与路由共用同一次选择，保证 `group` 与真实目标一致。
-
-### 凭证组：内置档位 + 自定义归类
-
-| 类型 | 选择器里长什么样 | 写进映射的 group |
-|------|------------------|------------------|
-| **内置档**（Codex `plan_type`、Antigravity `tier`） | 如「免费档 / Team」 | 裸名：`free`、`team`、`supported` |
-| **自定义归类** | 如 **「自定义 · vip」** | 带前缀：`classify:vip` |
-
-**运行时规则：** 映射里写了 group，调度就**只**在该组凭证里选文件。没有可用文件 → 直接失败（`auth_not_found`），**绝不**偷偷落到其他档。
-
-**调度：** 插件先保留可用凭证中 `Priority` 最高的一层，再按凭证的 `weight` 执行**平滑加权轮询**：
-
-- 权重来自 CPA 凭证配置，插件兼容候选的 `Weight`、`Attributes.weight` 和 `Metadata.weight`。
-- 未配置或无法解析时按 `1` 处理；非正数表示暂停接收新请求；最大按 `1000000` 处理。
-- 轮询状态按 `provider + model + group + Priority` 全局共享，所有 `cpa_…` key 共用同一分配比例。group 为空时，CPA 为该 provider/model 提供的全部候选凭证形成一个全局池。
-- 低 `Priority` 凭证仅在更高优先级凭证全部不可用或权重非正时参与。
-- CPA 未转发前端鉴权 group 元数据时（包括 CPA `7.2.140`），插件自有密钥仍会执行全局加权轮询，不再回退到 CPA 的 `routing.strategy`；CPA 原生密钥不受影响。
-- 设置 `global_weighted_round_robin: true` 后，即使 CPA 能转发 group，插件也会主动忽略它，并在当前 provider/model 的全部候选凭证中按 Weight 调度。
-
-**自定义归类**（网页 → 映射 → 凭证归类）：
-
-- 用正则匹配凭证字段（`filename`、`provider`、`plan_type`、`tier` 等）。
-- 规则上保存你起的**组名**（裸名）。
-- 目录与映射使用 `classify:组名`，避免和内置的 `free`/`team` 撞名。
-- 一个文件可命中**多个**自定义组（选择器里每组都会出现）。
-- 没命中自定义规则 → Codex/Antigravity 走内置档；其它 auth-file 渠道默认扁平（无组）。
-- openai-compat / API Key 类通道保持**扁平**，不拆组。
-
-一般在网页或管理 API 配置即可，不必手改 state JSON。
-
-### openai-compatibility 通道
-
-CPA 里配置的兼容通道，映射时 `provider` 填通道 **name**。插件路由时会对应到主机内部的 `openai-compatible-<name>`。通道配置里的 **models 列表要写全**，否则主机会报「该模型无可用 auth」。
-
----
-
-## 插件能力一览
-
-| 钩子 | 作用 |
-|------|------|
-| 前端鉴权 | 识别插件 key；校验别名、RPM、额度；写入路由与 group 元数据 |
-| 模型路由 | 别名 → provider + 目标模型 |
-| 调度 | 可选按 group 档位 / `classify:` 过滤，并在最高 Priority 层内平滑加权轮询 |
-| 响应拦截 | 非流式 JSON：把顶层 `model` 改回别名 |
-| 用量 | token / 按次计费写入 state |
-| 管理 API + 内嵌网页 | Key、别名、归类、状态 |
-
----
-
-## 编译
-
-Linux `.so` 需要 cgo：
-
-```bash
-make test
-make build-linux          # 先编前端，再编 linux amd64/arm64 .so
-# 或
-make web-build
-GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build -buildvcs=false -tags cshared \
-  -buildmode=c-shared -o dist/cpa-key-policy_linux_amd64.so ./cmd/cpa-key-policy
-```
-
-Windows 上请用 WSL/Linux 编 `.so`。`go test ./...` 可用非 cgo stub，不依赖动态库工具链。
-
-把 `.so` 放进 CPA 的 `plugins.dir`，并在配置里启用插件。
-
----
-
-## 配置
-
-最小形态（完整示例见 [`config.example.yaml`](./config.example.yaml)）：
+1. 从 [Releases](https://github.com/wenrui0128/cpa-key-policy-community/releases) 下载 Linux amd64 ZIP，并用 `SHA256SUMS` 校验文件。
+2. 将 `cpa-key-policy-v0.5.1-community.2.so` 放入 CPA 的 `plugins.dir`。保留此文件名，CPA 会根据文件名识别插件 ID。
+3. 在 CPA 配置中启用插件：
 
 ```yaml
 plugins:
@@ -145,61 +40,118 @@ plugins:
       enabled: true
       priority: 10
       state_file: "cpa-key-policy-state.json"
-      global_weighted_round_robin: true
+      global_weighted_round_robin: false
 ```
 
-说明：
-
-- 若已有 `state_file`，则以其中的 keys / 别名 / 归类 / 用量为准。
-- `global_weighted_round_robin: true` 会忽略别名目标选中的 group，把当前 provider/model 的所有候选凭证放入同一个全局权重池。默认为 `false`。
-- 开启该选项后，别名层的 group 仍会轮询，但不再限制最终凭证；分配比例只由 CPA 凭证页的 Weight 决定。
-- 日常请用**网页**或管理 API 建 key 和别名；YAML 种子数据主要用于首次启动。
-- 公开文档里不要写真实管理密钥、主机名或凭证内容。
-
----
-
-## 网页管理界面
-
-插件内嵌。加载后访问：
+4. 重启 CPA，打开管理页面：
 
 ```text
-http://<你的-cpa-主机>:<api端口>/v0/resource/plugins/cpa-key-policy/index.html
+http://<CPA主机>:<端口>/v0/resource/plugins/cpa-key-policy/index.html
 ```
 
-用 CPA **管理密钥**登录（`remote-management.secret-key` 或管理密码）。密钥只放在内存，不写 `localStorage`；刷新页面需重新登录。
+使用 CPA 管理密钥登录。页面将密钥保存在内存中，刷新后需要重新登录。通过公网访问时使用 HTTPS；管理入口也可放在加密的私有网络中。
 
-| 区域 | 用途 |
-|------|------|
-| Keys | 创建/编辑/轮换/删除 key；绑模型或别名；RPM 与额度 |
-| 映射 → 别名 | 全局多目标别名、调度方式、定价 |
-| 映射 → 凭证归类 | 自定义分组规则与命中预览 |
-| 选模型 | 提供商目录；内置档 / **自定义 · …** 子组 |
+升级时，先备份 `state_file`，替换动态库后重启 CPA。插件目录中只保留一份 key-policy 动态库，并沿用原来的 `state_file`，其中保存了 Key、别名、分组规则和用量。
 
-不重编 `.so` 时开发前端：
+完整配置示例见 [config.example.yaml](config.example.yaml)。
 
-```bash
-cd web
-npm ci --ignore-scripts
-VITE_CPA_BASE=http://127.0.0.1:8317 npm run dev
-```
+## 创建和使用 Key
 
----
+1. 打开插件的 Keys 页面，创建 Key，选择允许使用的模型或别名。
+2. 设置 RPM、每日／每周预算，以及模型的 token 单价或按次价格。
+3. 保存创建时返回的完整 Key；创建或轮换后仅显示一次。
+4. 在客户端填写 CPA 的 OpenAI 兼容接口地址，使用该 Key，并将 `model` 设置为允许的模型名或别名。
 
-## 管理 API 摘要
+例如，为 `fast` 别名配置 `codex` 提供商和 `gpt-5.4-mini` 目标模型，客户端即可使用 `model: fast` 发起请求。
 
-路径为精确匹配。鉴权：CPA 管理 Bearer。
+**不要把插件创建的 Key 再添加到 CPA 原生 `api-keys` 中，否则可能绕过插件的权限和预算限制。**
 
-**Key：** `GET/POST/PATCH/DELETE …/keys`，以及 `rotate` / `reset-rpm` / `usage` / `status`  
+### 预算和计费
 
-**别名：** `GET/POST/DELETE …/aliases`  
+- 消费按配置的模型价格折算为美元，分别受每日和每周预算限制。
+- **预算为 0 表示不限额**。未定价或价格为 0 的模型可能不产生扣费。
+- 预算检查依据已完成请求的消费，并发执行中的请求没有预留额度，最终消费可能超过上限。
+- 默认界面显示周用量。每日统计在 UTC 00:00 切换。
+- `/v1/models` 权限是允许或拒绝访问；允许后返回 CPA 全局模型列表，不按 Key 过滤。请求模型时仍会检查该 Key 的模型权限。
 
-**归类：**  
+### 管理页面
 
-- `…/classify-rules`（含 reorder）  
-- `POST …/classify-preview` — 预览组 → 凭证 id（组名为规则裸名）  
-- `POST …/catalog` — 前端提交 auth-file + 模型列表，返回带 `classify:` 的选择器条目  
+| 页面 | 用途 |
+|---|---|
+| Keys | 管理 Key、模型权限、RPM 和预算，查看用量 |
+| 映射 → 别名 | 配置共享别名、多个目标、调度方式和价格 |
+| 映射 → 凭证归类 | 配置自定义分组规则，预览匹配结果 |
+| 模型选择器 | 按提供商、账户档位和自定义分组选择模型 |
 
-创建 key（`plain_key` **只返回一次**）：
+## 部署额度监控
+
+[CPA Limits](monitor/README.md) 是独立的 Python 服务，用于查看官方周额度、重置时间、各 Key 预算和用量，以及重置卡有效期。监控页面只提供查看功能；预算和 Key 设置在插件管理页面修改。
+
+默认关闭官方周期同步。设置 `SYNC_OFFICIAL_CYCLE=true` 后，全部插件 Key 可跟随一个 Codex 账户的官方周周期：首次同步保留已有消费，后续确认新周期后归档旧用量，并保留周期开始后已记录的消费。
+
+`ESTIMATED_TOTAL` 仅用于显示总额度估算，不会修改 Key 预算。官方额度百分比与插件按价格累计的金额分别统计。
+
+安装、登录、HTTPS 反向代理和参数说明见 [监控部署文档](monitor/README.md)。
+
+## 模型别名和凭证分组
+
+### 别名
+
+别名将客户端模型名映射到一个或多个上游目标，Key 可以引用同一个别名。
+
+| 字段 | 含义 |
+|---|---|
+| `provider` | CPA 提供商标识，例如 `codex`、`claude`，或 OpenAI 兼容通道的 `name` |
+| `target_model` | 上游模型 ID |
+| `group` | 可选的凭证组 |
+| `dispatch` | `priority` 或 `round-robin` |
+| `billing_mode` | `tokens`（按百万 token 定价）或 `per_call`（按次定价） |
+
+同一请求的鉴权与路由使用同一次目标选择，确保凭证组与目标一致。非流式 JSON 响应中的顶层 `model` 会改回别名；流式响应正文保持原样。
+
+OpenAI 兼容通道使用 CPA 配置中的通道 `name` 作为 `provider`。通道的 `models` 列表需包含目标模型，否则 CPA 可能返回无可用凭证的错误。
+
+### 凭证组
+
+| 类型 | `group` 写法 | 配置来源 |
+|---|---|---|
+| 内置账户档位 | `free`、`team`、`supported` 等 | Codex `plan_type`、Antigravity `tier` |
+| 自定义分组 | `classify:组名` | 插件的凭证归类规则 |
+
+自定义规则使用正则表达式匹配 `filename`、`provider`、`plan_type`、`tier` 等字段。同一凭证可以属于多个自定义组。没有匹配规则时，Codex 和 Antigravity 使用内置档位；其他 auth-file 提供商不分组。OpenAI 兼容及 API Key 通道不分组。
+
+启用组过滤时，插件只选择组内凭证；没有可用凭证则返回 `auth_not_found`。
+
+### 加权调度
+
+插件先选择可用凭证中最高的 `Priority` 层，再按权重执行平滑加权轮询。
+
+- 权重依次读取 `Weight`、`Attributes.weight` 和 `Metadata.weight`。
+- 未配置或无法解析时按 `1` 处理；非正数暂停接收新请求；最大值为 `1000000`。
+- 轮询状态按 `provider + model + group + Priority` 共享，因此所有插件 Key 使用同一分配比例。
+- 只有高优先级凭证全部不可用或权重非正时，才使用低优先级凭证。
+- CPA 未传递鉴权阶段的 group 元数据时，插件 Key 使用当前提供商和模型的全局加权轮询。CPA 原生 Key 不受影响。
+
+设置 `global_weighted_round_robin: true` 会跳过组过滤，将当前提供商和模型的全部候选凭证放入同一个权重池。需要按账户档位隔离请求时，保持此选项为 `false`，并确认所用 CPA 版本能传递 group 元数据。
+
+## 管理 API
+
+接口前缀为 `/v0/management/plugins/cpa-key-policy`，使用 CPA 管理密钥进行 Bearer 鉴权。
+
+| 接口 | 用途 |
+|---|---|
+| `GET/POST/PATCH/DELETE /keys` | 查询、创建、修改和删除 Key |
+| `POST /keys/rotate?id=…` | 轮换 Key |
+| `POST /keys/reset-rpm?id=…` | 重置 RPM 计数 |
+| `GET /keys/usage?id=…` | 查询 Key 用量 |
+| `GET /status` | 查询插件状态 |
+| `GET/POST/DELETE /aliases` | 管理别名 |
+| `GET/POST/DELETE /classify-rules` | 管理凭证归类规则 |
+| `POST /classify-rules/reorder` | 调整规则顺序 |
+| `POST /classify-preview` | 预览分组匹配结果 |
+| `POST /catalog` | 生成模型选择器目录 |
+
+设置 `CPA` 为 CPA 基础地址、`MANAGEMENT_KEY` 为管理密钥后，可创建 Key：
 
 ```bash
 curl -X POST "$CPA/v0/management/plugins/cpa-key-policy/keys" \
@@ -215,67 +167,56 @@ curl -X POST "$CPA/v0/management/plugins/cpa-key-policy/keys" \
   }'
 ```
 
-多目标别名示例：
+响应中的 `plain_key` 仅返回一次，请及时保存。
+
+## 从源码构建
+
+需要 Node.js 24+、Go 1.27.2，以及支持 cgo 的 C 编译器。在 Linux amd64 上运行：
 
 ```bash
-curl -X POST "$CPA/v0/management/plugins/cpa-key-policy/aliases" \
-  -H "Authorization: Bearer $MANAGEMENT_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "alias": "cheap-chat",
-    "dispatch": "priority",
-    "billing_mode": "tokens",
-    "targets": [
-      {"provider":"cerebras","target_model":"gpt-oss-120b"},
-      {"provider":"codex","target_model":"gpt-5.4-mini","group":"free"}
-    ]
-  }'
+make test
+make build-linux-amd64
 ```
 
----
+安装时重命名构建输出：
 
-## 客户端请求行为
+```bash
+install -m 0644 dist/cpa-key-policy_linux_amd64.so \
+  "$CPA_PLUGIN_DIR/cpa-key-policy-v0.5.1-community.2.so"
+```
 
-| 情况 | 结果 |
-|------|------|
-| 认识的 key + 允许的别名 | 鉴权通过 → 路由 → 可选 group 过滤 → 上游 |
-| 不允许的模型名 | 鉴权失败 |
-| 超 RPM / 额度 | 拒绝 |
-| 写了 group 但组内无可用凭证 | `auth_not_found` / 不可用（不串档） |
-| 不认识的 key | 插件放弃，CPA 可尝试原生 `api-keys` |
-| 非流式对话响应 | 顶层 `model` 改回别名 |
-| 流式 | v1 不改写 body |
+`CPA_PLUGIN_DIR` 指向 CPA 的插件目录。在原生 Linux arm64 环境中可使用 `make build-linux-arm64`；该平台尚未完成运行验证。Windows 可通过 WSL/Linux 构建。
 
-### 主端口的 `/v1/models`
+开发前端：
 
-每 key 的 `allow_models_endpoint` 是**开关**：拒绝（401）或看**全局完整列表**。主端口无法按插件 key 过滤列表。
+```bash
+cd web
+npm ci --ignore-scripts
+VITE_CPA_BASE=http://127.0.0.1:8317 npm run dev
+```
 
-
----
-
-## 上手清单
-
-1. 编译/安装 `.so` 到 CPA `plugins.dir`。  
-2. 启用 `plugins` 与 `cpa-key-policy`，配置 `state_file`。  
-3. 用管理密钥打开网页 UI。  
-4. （可选）配置**凭证归类**规则。  
-5. 建**别名**（多目标/定价）和/或给 key 勾选模型（含档位或「自定义 · …」）。  
-6. 创建 key，保存一次性 `plain_key`，发给客户。  
-7. 客户：OpenAI 兼容 base URL = CPA；`Bearer cpa_…`；`model` = 别名。  
-8. openai-compat 通道务必声明 models，否则会「无 auth」。
-
----
+单独编译 Go 动态库前，先运行 `make web-build`，将前端嵌入文件更新到插件中。
 
 ## 测试
 
+在仓库根目录运行：
+
 ```bash
 go test ./...
-cd web && npm test && npm run build
+(cd web && npm test && npm run build)
+python3 -m unittest discover -s monitor -p 'test_*.py' -v
 ```
 
+集成测试使用 Linux Docker 主机和本地 CPA 8.0.24 镜像：
 
-## 安装与验证注意事项
+```bash
+python3 scripts/test-integration.py
+```
 
-CPA 按动态库文件名识别插件 ID。安装时将构建输出 `cpa-key-policy_linux_amd64.so` 重命名为 **`cpa-key-policy-v0.5.1-community.2.so`**，放入 `plugins.dir`；二进制 ZIP 已采用正确文件名。只保留一份 key-policy 动态库，保留原 `state_file` 并在升级前备份账本。打开 `plugins.enabled` 和 `plugins.configs.cpa-key-policy.enabled` 后重启 CPA。本次实际验证的是 Linux amd64 / glibc 与 CPA 8.0.24；Alpine/musl、arm64 等需单独编译和验证。
+可通过 `CPA_TEST_IMAGE` 指定镜像。测试使用临时容器、独立网络和模拟的官方额度响应，结束后清理测试状态。兼容性和测试范围见 [VALIDATION.md](VALIDATION.md)，安全配置见 [SECURITY.md](SECURITY.md)。
 
-可在隔离的 Linux Docker 主机上运行 `python3 scripts/test-integration.py`。它只创建自己的临时容器、独立网络与 loopback 端口，完成后清理；所有 Key、用量和官方响应均为合成数据。真实上游推理、生产账户及公网 HTTPS 登录不在本次离线验证范围内。详见 [验证记录](VALIDATION.md) 和 [隐私审查](PRIVACY.md)。
+## 项目来源与许可证
+
+基于 [origin652/cpa-plugin-key-policy](https://github.com/origin652/cpa-plugin-key-policy) v0.5.1 开发，沿用 [MIT 许可证](LICENSE) 并保留原作者署名。此仓库为社区分支；[CPA 插件商店](https://github.com/router-for-me/CLIProxyAPI-Plugins-Store) 提供的是上游版本。
+
+版本变更见 [CHANGELOG.md](CHANGELOG.md)。

@@ -1,147 +1,35 @@
 # cpa-key-policy
 
-Community source edition **0.5.1-community.2**, derived from the MIT-licensed upstream v0.5.1. This is a separate source release, not an official plugin-store update. No accounts, keys, usage records, production endpoints or private installers are included.
+An API key management plugin for [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI). Configure model access, rate limits, daily and weekly budgets, model aliases and credential groups. Manage keys inside CPA, and optionally deploy CPA Limits to view quota and usage.
 
-This edition adds official-cycle management APIs, weekly-default usage, card progress and inline weekly budgets, and navigation beside the plugin title. The optional [CPA Limits monitor](monitor/README.md) collects official quota through CPA and can synchronize confirmed official cycles when explicitly enabled. It runs as a separate read-only viewer service. It also masks short keys, restricts automatic management-key reuse to the same origin, prevents cross-origin framing, and refreshes the frontend dependencies. See [SECURITY.md](SECURITY.md), [CHANGELOG.md](CHANGELOG.md) and [VALIDATION.md](VALIDATION.md).
+Version: **0.5.1-community.2** (prerelease) · [中文说明](README.zh-CN.md)
 
-Build tools: Node.js 24+, Go 1.27.2 and a C compiler for shared-library builds. Run `make web-build` before Go compilation. Only Linux build jobs are provided; the other platforms are not validated in this edition. CI validates pull requests and pushes; binary builds require manual dispatch and do not automatically publish a GitHub release.
+## Features
 
-Downstream **API key policy** plugin for [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI).
-
-In plain words: you issue your own `cpa_…` keys to clients. Each key can call only the model aliases you allow, can be rate-limited and budget-limited, and is routed to real CPA upstream providers (Codex, Claude, OpenAI-compat channels, etc.). CPA’s own `api-keys` can still exist for admin use — **do not put plugin-issued keys into `api-keys`**, or you bypass this plugin.
-
-| | |
-|---|---|
-| **Upstream** | [origin652/cpa-plugin-key-policy](https://github.com/origin652/cpa-plugin-key-policy) |
-| **License** | MIT |
-| **Install** | [CLIProxyAPI Plugins Store](https://github.com/router-for-me/CLIProxyAPI-Plugins-Store) (upstream version) or build this fork from source |
-| **中文说明** | [README.zh-CN.md](./README.zh-CN.md) |
-
----
+- Per-key model access, RPM limits, and daily or weekly budgets.
+- Token or per-call pricing, weekly usage by default, and inline weekly-budget editing.
+- Shared model aliases with multiple targets and priority or round-robin dispatch.
+- Credential selection by account tier or custom group, with weighted scheduling.
+- Key creation, editing, rotation and deletion through a web UI or management API.
+- An optional monitor for official quota, reset times and key usage, with opt-in official-cycle synchronization.
 
 ## Screenshots
 
-All names, amounts and reset-card records below are synthetic.
+CPA Limits:
 
-![Weekly monitoring dashboard](docs/images/monitor-desktop.png)
+![CPA Limits dashboard](docs/images/monitor-desktop.png)
 
-![Key policy management](docs/images/plugin-desktop.png)
+Key management inside CPA:
 
-## What it does (human version)
+![Key management](docs/images/plugin-desktop.png)
 
-1. **Issue keys** — create many downstream keys; each has an allow-list of models (or shared aliases).
-2. **Route** — client calls with alias name `fast`; plugin rewrites to e.g. `codex` + `gpt-5.4-mini`.
-3. **Limit** — per-key RPM, optional daily/weekly USD caps, token or per-call billing.
-4. **Isolate credentials (tiers / groups)** — pin a request to Codex free/team/… or to a **custom classify group** so it never lands on the wrong auth file.
-5. **Multi-target aliases** — one alias can point at several backends (priority or round-robin).
-6. **Web UI** — manage keys, global aliases, and credential classification inside CPA.
+## Install
 
----
+The supplied binary targets **Linux amd64 / glibc** and has been tested with CPA **8.0.24**. Alpine/musl, arm64 and other environments require a separate build and validation.
 
-## Concepts
-
-### Downstream key
-
-A plugin-owned secret (`cpa_…`). Authenticated only by this plugin. Holds:
-
-- allowed **models** and/or **aliases**
-- RPM
-- optional daily / weekly dollar limits
-- optional `allow_models_endpoint` (see below)
-
-### Alias (global mapping table)
-
-A reusable name like `fast` that expands to one or more **targets**:
-
-| Field | Meaning |
-|--------|---------|
-| `provider` | CPA provider id (`codex`, `claude`, or an openai-compatibility **name** such as `cerebras`) |
-| `target_model` | Real upstream model id |
-| `group` | Optional credential filter (see [Credential groups](#credential-groups-tiers--classify)) |
-| `dispatch` | `priority` (always first usable target) or `round-robin` |
-| billing | `tokens` (per-million prices) or `per_call` (fixed USD) |
-
-Keys can **reference** aliases instead of duplicating targets. Multi-target aliases expand to several rules with the same alias name; auth and routing share one pick per request so the `group` filter matches the chosen target.
-
-### Credential groups (tiers + classify)
-
-Two sources of “which auth file may serve this request”:
-
-| Kind | How it appears in the picker | Stored in mapping as |
-|------|------------------------------|----------------------|
-| **Built-in tier** (Codex `plan_type`, Antigravity `tier`) | e.g. Free tier / Team | bare name: `free`, `team`, `supported` |
-| **Custom classify rule** | e.g. **Custom · vip** | prefixed: `classify:vip` |
-
-**Runtime rule:** if a mapping sets a group, the plugin scheduler **only** picks auth files in that group. No match → hard failure (`auth_not_found`), never silently fall back to another tier.
-
-**Scheduling:** the plugin keeps the highest available `Priority` tier, then applies **smooth weighted round-robin** using each credential's `weight`:
-
-- Weight is read from the CPA credential candidate's `Weight`, `Attributes.weight`, or `Metadata.weight` field.
-- Missing or invalid weight defaults to `1`; non-positive weight stops new requests; values are capped at `1000000`.
-- State is shared globally by `provider + model + group + Priority`, so all downstream `cpa_…` keys contribute to one distribution. An empty group is one global pool containing every candidate CPA offers for that provider/model.
-- Lower-priority credentials participate only when every higher-priority credential is unavailable or has non-positive weight.
-- When CPA does not propagate frontend-auth group metadata (including CPA `7.2.140`), plugin-owned keys still use global weighted round-robin instead of falling back to CPA's `routing.strategy`; native CPA keys remain untouched.
-- With `global_weighted_round_robin: true`, the plugin deliberately ignores group even when CPA propagates it, then schedules by Weight across every current provider/model candidate.
-
-**Custom classification** (Web UI → Mapping → Credential Classification):
-
-- Match auth-file fields (`filename`, `provider`, `plan_type`, `tier`, …) with a regex.
-- Assign a **group name** you choose (stored bare on the rule).
-- Catalog and mappings use `classify:<name>` so it never collides with built-in `free` / `team`.
-- One file can match **multiple** custom groups (shown under each).
-- If no custom rule matches → built-in tier (for Codex/Antigravity) or flat (no group) for other auth-file providers.
-- OpenAI-compat / API-key channels stay **flat** (no groups).
-
-Configure classify rules in the UI, or via management API (`/classify-rules`, `/classify-preview`, `/catalog`). You do not need to hand-edit state JSON for normal use.
-
-### OpenAI-compatibility providers
-
-Channels under CPA `openai-compatibility` (e.g. a named proxy) use the **channel name** as `provider`. The plugin maps it to CPA’s internal key `openai-compatible-<name>` when routing. Models must be listed on that channel in CPA config, or the host reports no auth for that model.
-
----
-
-## Capabilities (plugin hooks)
-
-| Hook | Role |
-|------|------|
-| Frontend auth | Know plugin keys; enforce alias allow-list, RPM, budget; stamp route + group metadata |
-| Model router | Alias → provider + target model |
-| Scheduler | Optionally filter candidates by `group`, then smooth-weight them within the highest Priority tier |
-| Response interceptor | Non-stream JSON: rewrite top-level `model` back to the alias |
-| Usage | Token / per-call billing into the state file |
-| Management API + embedded Web UI | Keys, aliases, classify rules, status |
-
----
-
-## Build
-
-Linux `.so` needs cgo and a matching toolchain:
-
-```bash
-make test
-make build-linux-amd64    # run on Linux amd64; use build-linux-arm64 on native arm64
-# or
-make web-build
-GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build -buildvcs=false -tags cshared \
-  -buildmode=c-shared -o dist/cpa-key-policy_linux_amd64.so ./cmd/cpa-key-policy
-```
-
-On Windows, build the `.so` via WSL/Linux. `go test ./...` uses a non-cgo stub so unit tests run without a shared-library toolchain.
-
-CPA discovers the plugin ID from its filename. **Rename the architecture-labelled build output when installing**:
-
-```bash
-install -m 0644 dist/cpa-key-policy_linux_amd64.so \
-  "$CPA_PLUGIN_DIR/cpa-key-policy-v0.5.1-community.2.so"
-```
-
-Set `CPA_PLUGIN_DIR` to your CPA plugin directory before running this command. Keep one installed key-policy library, enable `plugins` plus `plugins.configs.cpa-key-policy.enabled`, and restart CPA. Back up the ledger before upgrading; retain the existing `state_file`. Do not use `cpa-key-policy_linux_amd64.so` as the installed filename because CPA treats that as a different plugin ID. The prepared binary ZIP already contains the correct installation filename. Linux amd64 with glibc is validated; Alpine/musl and other architectures require their own build and validation.
-
----
-
-## Config
-
-Minimal shape (see also [`config.example.yaml`](./config.example.yaml)):
+1. Download the Linux amd64 ZIP from [Releases](https://github.com/wenrui0128/cpa-key-policy-community/releases) and verify it against `SHA256SUMS`.
+2. Place `cpa-key-policy-v0.5.1-community.2.so` in CPA's `plugins.dir`. Keep this filename: CPA derives the plugin ID from it.
+3. Enable the plugin in the CPA configuration:
 
 ```yaml
 plugins:
@@ -152,72 +40,118 @@ plugins:
       enabled: true
       priority: 10
       state_file: "cpa-key-policy-state.json"
-      global_weighted_round_robin: true
+      global_weighted_round_robin: false
 ```
 
-Notes:
-
-- If `state_file` exists, it is the source of truth for keys / aliases / classify rules / usage.
-- `global_weighted_round_robin: true` ignores the selected alias target group and places every current provider/model candidate in one global pool. Distribution then follows the Weight values on CPA's credential page. The default is `false`.
-- With this option enabled, alias-level group rotation no longer restricts the final credential. Native CPA keys remain unaffected.
-- Prefer creating keys and aliases in the **Web UI** or Management API; seed YAML `keys` is mainly for first boot.
-- Never commit real key hashes, management secrets, or live host URLs into public docs.
-
----
-
-## Web Management UI
-
-Embedded in the plugin. After load, open:
+4. Restart CPA and open the management page:
 
 ```text
-http://<your-cpa-host>:<api-port>/v0/resource/plugins/cpa-key-policy/index.html
+http://<cpa-host>:<port>/v0/resource/plugins/cpa-key-policy/index.html
 ```
 
-Login with CPA **management** secret (`management.secret-key (legacy: remote-management.secret-key)` / management password). The secret stays in memory only (not `localStorage`); refresh → re-login.
+Sign in with the CPA management secret. The page keeps it in memory; reloading requires another login. Use HTTPS for Internet access, or access the management page over an encrypted private network.
 
-UI areas:
+For upgrades, back up `state_file`, replace the library and restart CPA. Keep only one key-policy library installed and retain the existing `state_file`, which stores keys, aliases, classification rules and usage.
 
-| Tab / page | Use for |
-|------------|---------|
-| Keys | Create / edit / rotate / delete keys; bind models or aliases; RPM & budgets |
-| Mapping → Aliases | Global multi-target aliases, dispatch, pricing |
-| Mapping → Classification | Custom credential groups + match preview |
-| Model picker | Catalog of providers; tier / **Custom · …** subgroups |
+See [config.example.yaml](config.example.yaml) for a full configuration example.
 
-Dev UI without rebuilding the `.so`:
+## Create and use a key
 
-```bash
-cd web
-npm ci --ignore-scripts
-VITE_CPA_BASE=http://127.0.0.1:8317 npm run dev
-```
+1. Open the Keys page, create a key and select its allowed models or aliases.
+2. Set RPM, daily or weekly budgets, and token or per-call prices for the models.
+3. Save the complete key returned on creation. It is shown only when created or rotated.
+4. Configure the client with CPA's OpenAI-compatible API URL and the new key. Set `model` to an allowed model or alias.
 
----
+For example, map the alias `fast` to provider `codex` and target model `gpt-5.4-mini`. Clients can then send requests with `model: fast`.
 
-## Management API (summary)
+**Do not add plugin-issued keys to CPA's native `api-keys` configuration. Doing so may bypass plugin access controls and budgets.**
 
-Exact paths (no path templates). Auth: CPA management bearer token.
+### Budgets and billing
 
-**Keys**
+- Usage is charged in USD at the configured model prices, subject to daily and weekly limits.
+- **A budget of 0 means unlimited.** Unpriced or zero-priced models may incur no budget charge.
+- Admission checks use completed usage. There is no reservation for concurrent requests, so final spending can exceed a limit.
+- The UI displays weekly usage by default. Daily accounting resets at UTC 00:00.
+- `/v1/models` access is an allow/deny setting. When allowed, it returns CPA's global model list rather than a per-key list. Model permissions still apply to inference requests.
 
-- `GET/POST/PATCH/DELETE …/keys` (`id` in query or body for mutate)
-- `POST …/keys/rotate?id=…`
-- `POST …/keys/reset-rpm?id=…`
-- `GET …/keys/usage?id=…`
-- `GET …/status`
+### Management pages
 
-**Aliases**
+| Page | Purpose |
+|---|---|
+| Keys | Manage keys, model access, RPM and budgets; view usage |
+| Mapping → Aliases | Configure shared aliases, targets, dispatch and pricing |
+| Mapping → Classification | Configure credential groups and preview matches |
+| Model picker | Select models by provider, account tier and custom group |
 
-- `GET/POST/DELETE …/aliases`
+## Deploy the quota monitor
 
-**Classify**
+[CPA Limits](monitor/README.md) is a separate Python service displaying official weekly quota, reset time, per-key budgets and usage, and reset-card expiry. Its browser interface is read-only. Change budgets and key settings in the plugin management UI.
 
-- `GET/POST/DELETE …/classify-rules`
-- `POST …/classify-rules/reorder`
-- `POST …/classify-preview` — group → credential ids (UI preview; bare group names)
-- `POST …/catalog` — body: auth-file credentials + models; response: picker `entries` with `classify:` groups
+Official-cycle synchronization is disabled by default. Setting `SYNC_OFFICIAL_CYCLE=true` makes all plugin keys follow one Codex account's official weekly cycle. Initial adoption preserves spending. Later confirmed cycles archive earlier usage and retain recorded consumption after the new boundary.
 
-Create key (plain key returned **once**):
+`ESTIMATED_TOTAL` controls only the displayed quota estimate; it does not change key budgets. Official percentages and costs calculated from model prices are tracked separately.
+
+See the [monitor guide](monitor/README.md) for installation, login, HTTPS proxy configuration and settings.
+
+## Model aliases and credential groups
+
+### Aliases
+
+An alias maps a client model name to one or more upstream targets. Multiple keys can reference the same alias.
+
+| Field | Meaning |
+|---|---|
+| `provider` | CPA provider ID, such as `codex`, `claude`, or an OpenAI-compatible channel's `name` |
+| `target_model` | Upstream model ID |
+| `group` | Optional credential group |
+| `dispatch` | `priority` or `round-robin` |
+| `billing_mode` | `tokens` (per-million token pricing) or `per_call` |
+
+Authentication and routing share one target selection per request, keeping the group and target consistent. Non-streaming JSON responses have their top-level `model` rewritten to the alias. Streaming response bodies are unchanged.
+
+For OpenAI-compatible channels, use the channel's CPA `name` as `provider`. Include the target model in the channel's `models` configuration, or CPA may report that no credential is available.
+
+### Credential groups
+
+| Type | `group` value | Source |
+|---|---|---|
+| Built-in account tier | `free`, `team`, `supported`, etc. | Codex `plan_type`, Antigravity `tier` |
+| Custom group | `classify:<name>` | Plugin classification rules |
+
+Custom rules match credential fields such as `filename`, `provider`, `plan_type` and `tier` using regular expressions. A credential can belong to multiple custom groups. Without a match, Codex and Antigravity use built-in tiers; other auth-file providers remain ungrouped. OpenAI-compatible and API-key channels are also ungrouped.
+
+When group filtering is active, the plugin selects credentials within that group. If none are available, it returns `auth_not_found`.
+
+### Weighted scheduling
+
+The scheduler selects the highest available `Priority` tier, then applies smooth weighted round-robin.
+
+- Weight is read from `Weight`, `Attributes.weight` or `Metadata.weight`.
+- Missing or invalid values default to `1`; non-positive values stop new requests; the maximum is `1000000`.
+- Scheduling state is shared by `provider + model + group + Priority`, so all plugin keys use the same distribution.
+- Lower-priority credentials participate only when higher-priority credentials are unavailable or have non-positive weight.
+- If CPA does not pass authentication group metadata to the scheduler, plugin keys use a global weighted pool for the current provider and model. Native CPA keys are unaffected.
+
+Setting `global_weighted_round_robin: true` skips group filtering and pools all candidates for the current provider and model. To isolate requests by account tier, leave it `false` and verify that your CPA version passes group metadata.
+
+## Management API
+
+All paths use the prefix `/v0/management/plugins/cpa-key-policy` and require CPA management Bearer authentication.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET/POST/PATCH/DELETE /keys` | List, create, update and delete keys |
+| `POST /keys/rotate?id=…` | Rotate a key |
+| `POST /keys/reset-rpm?id=…` | Reset RPM counters |
+| `GET /keys/usage?id=…` | Read key usage |
+| `GET /status` | Read plugin status |
+| `GET/POST/DELETE /aliases` | Manage aliases |
+| `GET/POST/DELETE /classify-rules` | Manage classification rules |
+| `POST /classify-rules/reorder` | Reorder rules |
+| `POST /classify-preview` | Preview group matches |
+| `POST /catalog` | Build the model-picker catalog |
+
+With `CPA` set to the CPA base URL and `MANAGEMENT_KEY` set to the management secret:
 
 ```bash
 curl -X POST "$CPA/v0/management/plugins/cpa-key-policy/keys" \
@@ -233,67 +167,56 @@ curl -X POST "$CPA/v0/management/plugins/cpa-key-policy/keys" \
   }'
 ```
 
-Create a multi-target alias:
+Save `plain_key` from the response; it is returned only once.
+
+## Build from source
+
+Requires Node.js 24+, Go 1.27.2 and a C compiler with cgo support. On Linux amd64:
 
 ```bash
-curl -X POST "$CPA/v0/management/plugins/cpa-key-policy/aliases" \
-  -H "Authorization: Bearer $MANAGEMENT_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "alias": "cheap-chat",
-    "dispatch": "priority",
-    "billing_mode": "tokens",
-    "targets": [
-      {"provider":"cerebras","target_model":"gpt-oss-120b"},
-      {"provider":"codex","target_model":"gpt-5.4-mini","group":"free"}
-    ]
-  }'
+make test
+make build-linux-amd64
 ```
 
----
+Rename the build output when installing:
 
-## Client request behavior
+```bash
+install -m 0644 dist/cpa-key-policy_linux_amd64.so \
+  "$CPA_PLUGIN_DIR/cpa-key-policy-v0.5.1-community.2.so"
+```
 
-| Case | Result |
-|------|--------|
-| Known key + allowed alias | Auth OK → route → optional group filter → upstream |
-| Known key + unknown model | Auth rejected |
-| RPM / budget exceeded | Rejected |
-| Group set, no matching auth file | `auth_not_found` / unavailable (no cross-tier leak) |
-| Unknown key | Plugin declines; CPA may try native `api-keys` |
-| Non-stream chat response | Top-level `model` rewritten to alias |
-| Stream | Body not rewritten (v1) |
+Set `CPA_PLUGIN_DIR` to CPA's plugin directory. Use `make build-linux-arm64` on native Linux arm64; runtime compatibility on that platform has not been verified. On Windows, build through WSL/Linux.
 
-### `/v1/models` on CPA main port
+For frontend development:
 
-Per-key `allow_models_endpoint`: **binary** — deny (401) or full global list. CPA cannot filter that list per plugin key on the main port.
+```bash
+cd web
+npm ci --ignore-scripts
+VITE_CPA_BASE=http://127.0.0.1:8317 npm run dev
+```
 
-
----
-
-## Setup checklist
-
-1. Build / install the `.so` into CPA `plugins.dir`.
-2. Enable `plugins` + `cpa-key-policy` in CPA config; set `state_file`.
-3. Open the Web UI with the management secret.
-4. (Optional) Define **classify rules** if you need custom credential buckets.
-5. Create **aliases** (multi-target / pricing) and/or pick models per key (with tier or Custom group).
-6. Create keys, save the one-time `plain_key`, hand out to clients.
-7. Client: OpenAI-compatible base URL = CPA; `Authorization: Bearer cpa_…`; `model` = alias name.
-8. Ensure openai-compat channels list the models you map; empty model lists → host “no auth” errors.
-
----
+Run `make web-build` before compiling the Go library directly to update the embedded frontend.
 
 ## Tests
 
+From the repository root:
+
 ```bash
 go test ./...
-cd web && npm test && npm run build
+(cd web && npm test && npm run build)
+python3 -m unittest discover -s monitor -p 'test_*.py' -v
 ```
 
+Integration tests require a Linux Docker host and a local CPA 8.0.24 image:
 
-## Isolated validation
+```bash
+python3 scripts/test-integration.py
+```
 
-After building, run `python3 scripts/test-integration.py` on a Linux Docker host. It creates only its own temporary container, dedicated network and loopback port, uses synthetic keys/usage and deletes its runtime state afterward. It requires a local CPA 8.0.24 image; override `CPA_TEST_IMAGE` when needed. The official endpoint responses are mocked; no real upstream account is loaded and no inference is called.
+Override `CPA_TEST_IMAGE` to select another image. Tests use temporary containers, a dedicated network and mocked official quota responses, then remove their runtime state. See [VALIDATION.md](VALIDATION.md) for compatibility and test coverage, and [SECURITY.md](SECURITY.md) for security configuration.
 
-Optional browser QA: install Playwright beside a copy of `scripts/browser-qa.mjs`, install its Chromium browser, set `QUOTA_SOURCE` to the source tree and `BROWSER_QA_SCRIPT` to that script, then rerun the integration test. A temporary viewer password is generated automatically, never printed. Screenshots and the browser report contain fabricated display data only. See [VALIDATION.md](VALIDATION.md) and [PRIVACY.md](PRIVACY.md).
+## Attribution and license
+
+Based on [origin652/cpa-plugin-key-policy](https://github.com/origin652/cpa-plugin-key-policy) v0.5.1, with the original attribution and [MIT license](LICENSE) retained. This repository is a community fork. The [CPA Plugins Store](https://github.com/router-for-me/CLIProxyAPI-Plugins-Store) distributes the upstream version.
+
+See [CHANGELOG.md](CHANGELOG.md) for version history.
